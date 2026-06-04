@@ -3,7 +3,6 @@ WORKDIR /app
 
 COPY pom.xml .
 COPY eureka-server/pom.xml eureka-server/pom.xml
-COPY config-server/pom.xml config-server/pom.xml
 COPY api-gateway/pom.xml api-gateway/pom.xml
 COPY user-service/pom.xml user-service/pom.xml
 COPY account-service/pom.xml account-service/pom.xml
