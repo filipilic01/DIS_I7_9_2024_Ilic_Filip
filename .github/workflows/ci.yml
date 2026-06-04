@@ -1,4 +1,4 @@
-name: CI
+name: CI/CD
 
 on:
   push:
@@ -7,7 +7,11 @@ on:
     branches: [ main ]
 
 jobs:
-  build-and-test:
+
+  # ─── CI: Build and Test ───────────────────────────────────────────────────
+
+  test:
+    name: Build and Test
     runs-on: ubuntu-latest
 
     steps:
@@ -21,7 +25,7 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Build and run unit tests
+      - name: Run unit tests
         run: mvn test --batch-mode --no-transfer-progress
 
       - name: Run integration tests
@@ -36,3 +40,47 @@ jobs:
             **/target/surefire-reports/
             **/target/failsafe-reports/
           retention-days: 7
+
+  # ─── CD: Build and Push Docker Images ────────────────────────────────────
+
+  docker:
+    name: Docker Build & Push (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    strategy:
+      matrix:
+        service:
+          - eureka-server
+          - api-gateway
+          - user-service
+          - account-service
+          - transaction-service
+          - loan-service
+          - notification-service
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push ${{ matrix.service }}
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ matrix.service }}/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/banking-${{ matrix.service }}:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/banking-${{ matrix.service }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
