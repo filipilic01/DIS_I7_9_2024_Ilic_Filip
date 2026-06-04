@@ -1,5 +1,6 @@
 package com.bank.user.controller;
 
+import com.bank.user.dto.AuthRequestDTO;
 import com.bank.user.dto.CreateUserRequestDTO;
 import com.bank.user.repository.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -35,7 +36,11 @@ class UserControllerIT {
         registry.add("spring.datasource.url", postgres::getJdbcUrl);
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
+        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
         registry.add("eureka.client.enabled", () -> "false");
+        registry.add("eureka.client.register-with-eureka", () -> "false");
+        registry.add("eureka.client.fetch-registry", () -> "false");
+        registry.add("spring.cloud.discovery.enabled", () -> "false");
     }
 
     @Autowired
@@ -53,40 +58,76 @@ class UserControllerIT {
     }
 
     @Test
-    void createUser_returnsCreated() throws Exception {
-        CreateUserRequestDTO request = new CreateUserRequestDTO();
-        request.setUsername("testuser");
-        request.setEmail("test@example.com");
-        request.setPassword("password123");
-        request.setFirstName("Test");
-        request.setLastName("User");
-
-        mockMvc.perform(post("/users")
+    void register_success() throws Exception {
+        mockMvc.perform(post("/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                        .content(objectMapper.writeValueAsString(buildRequest("jdoe", "jdoe@example.com"))))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.username").value("testuser"))
-                .andExpect(jsonPath("$.email").value("test@example.com"));
+                .andExpect(jsonPath("$.token").isNotEmpty())
+                .andExpect(jsonPath("$.username").value("jdoe"))
+                .andExpect(jsonPath("$.userId").isNumber())
+                .andExpect(jsonPath("$.expiresAt").isNotEmpty());
     }
 
     @Test
-    void createUser_duplicateUsername_returnsConflict() throws Exception {
-        CreateUserRequestDTO request = new CreateUserRequestDTO();
-        request.setUsername("dupuser");
-        request.setEmail("first@example.com");
-        request.setPassword("password123");
-        request.setFirstName("Dup");
-        request.setLastName("User");
-
-        mockMvc.perform(post("/users")
+    void register_duplicateUsername_returnsConflict() throws Exception {
+        mockMvc.perform(post("/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)));
+                .content(objectMapper.writeValueAsString(buildRequest("dupuser", "first@example.com"))));
 
-        request.setEmail("second@example.com");
-        mockMvc.perform(post("/users")
+        mockMvc.perform(post("/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(buildRequest("dupuser", "second@example.com"))))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void register_invalidRequest_returns400() throws Exception {
+        CreateUserRequestDTO request = new CreateUserRequestDTO();
+        request.setUsername("ab");
+        request.setEmail("not-an-email");
+        request.setPassword("short");
+        request.setFirstName("F");
+        request.setLastName("L");
+
+        mockMvc.perform(post("/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isConflict());
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void login_success() throws Exception {
+        mockMvc.perform(post("/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(buildRequest("loginuser", "login@example.com"))));
+
+        AuthRequestDTO loginRequest = new AuthRequestDTO();
+        loginRequest.setUsername("loginuser");
+        loginRequest.setPassword("password123");
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(loginRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.token").isNotEmpty())
+                .andExpect(jsonPath("$.username").value("loginuser"));
+    }
+
+    @Test
+    void login_wrongPassword_returns401() throws Exception {
+        mockMvc.perform(post("/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(buildRequest("wrongpassuser", "wp@example.com"))));
+
+        AuthRequestDTO loginRequest = new AuthRequestDTO();
+        loginRequest.setUsername("wrongpassuser");
+        loginRequest.setPassword("wrongpassword");
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(loginRequest)))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -95,18 +136,13 @@ class UserControllerIT {
                 .andExpect(status().isNotFound());
     }
 
-    @Test
-    void createUser_invalidRequest_returns400() throws Exception {
+    private CreateUserRequestDTO buildRequest(String username, String email) {
         CreateUserRequestDTO request = new CreateUserRequestDTO();
-        request.setUsername("ab");
-        request.setEmail("not-an-email");
-        request.setPassword("short");
-        request.setFirstName("F");
-        request.setLastName("L");
-
-        mockMvc.perform(post("/users")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest());
+        request.setUsername(username);
+        request.setEmail(email);
+        request.setPassword("password123");
+        request.setFirstName("Test");
+        request.setLastName("User");
+        return request;
     }
 }
