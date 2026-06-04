@@ -4,6 +4,16 @@ spring:
   cloud:
     gateway:
       routes:
+        - id: auth-service
+          uri: lb://user-service
+          predicates:
+            - Path=/auth/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: user-service-cb
+                fallbackUri: forward:/fallback/user-service
+
         - id: user-service
           uri: lb://user-service
           predicates:
@@ -113,6 +123,9 @@ management:
       show-details: always
     gateway:
       enabled: true
+
+jwt:
+  secret: YmFua2luZ01pY3Jvc2VydmljZXNKV1RTZWNyZXRLZXkyMDI0IQ==
 
 logging:
   level:

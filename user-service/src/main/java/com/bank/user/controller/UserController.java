@@ -1,6 +1,5 @@
 package com.bank.user.controller;
 
-import com.bank.user.dto.CreateUserRequestDTO;
 import com.bank.user.dto.UpdateUserRequestDTO;
 import com.bank.user.dto.UserResponseDTO;
 import com.bank.user.service.UserService;
@@ -10,10 +9,9 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -23,22 +21,10 @@ import java.util.List;
 @RequestMapping("/users")
 @RequiredArgsConstructor
 @Tag(name = "Users", description = "User management API")
+@SecurityRequirement(name = "Bearer Authentication")
 public class UserController {
 
     private final UserService userService;
-
-    @Operation(summary = "Create a new user",
-               description = "Registers a new user in the system. Username and email must be unique.")
-    @ApiResponses({
-        @ApiResponse(responseCode = "201", description = "User created successfully",
-                content = @Content(schema = @Schema(implementation = UserResponseDTO.class))),
-        @ApiResponse(responseCode = "400", description = "Invalid request body", content = @Content),
-        @ApiResponse(responseCode = "409", description = "Username or email already exists", content = @Content)
-    })
-    @PostMapping
-    public ResponseEntity<UserResponseDTO> createUser(@Valid @RequestBody CreateUserRequestDTO request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(userService.createUser(request));
-    }
 
     @Operation(summary = "Get user by ID",
                description = "Returns user details for the given ID.")
