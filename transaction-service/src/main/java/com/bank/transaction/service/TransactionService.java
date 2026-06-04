@@ -53,7 +53,7 @@ public class TransactionService {
         transaction.setStatus(TransactionStatus.COMPLETED);
         transaction = transactionRepository.save(transaction);
 
-        rabbitMQProducer.sendTransactionEvent(buildEvent(transaction));
+        publishEvent(buildEvent(transaction));
         log.info("Deposit completed: transactionId={}, accountId={}, amount={}",
                 transaction.getId(), request.getAccountId(), request.getAmount());
         return toResponse(transaction);
@@ -83,7 +83,7 @@ public class TransactionService {
         transaction.setStatus(TransactionStatus.COMPLETED);
         transaction = transactionRepository.save(transaction);
 
-        rabbitMQProducer.sendTransactionEvent(buildEvent(transaction));
+        publishEvent(buildEvent(transaction));
         log.info("Withdrawal completed: transactionId={}, accountId={}, amount={}",
                 transaction.getId(), request.getAccountId(), request.getAmount());
         return toResponse(transaction);
@@ -121,7 +121,7 @@ public class TransactionService {
         transaction.setStatus(TransactionStatus.COMPLETED);
         transaction = transactionRepository.save(transaction);
 
-        rabbitMQProducer.sendTransactionEvent(buildEvent(transaction));
+        publishEvent(buildEvent(transaction));
         log.info("Transfer completed: transactionId={}, from={}, to={}, amount={}",
                 transaction.getId(), request.getSourceAccountId(), request.getTargetAccountId(), request.getAmount());
         return toResponse(transaction);
@@ -140,6 +140,15 @@ public class TransactionService {
                 .stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    private void publishEvent(TransactionEvent event) {
+        try {
+            rabbitMQProducer.sendTransactionEvent(event);
+        } catch (Exception e) {
+            log.error("Failed to publish transaction event for transactionId={}: {}",
+                    event.getTransactionId(), e.getMessage());
+        }
     }
 
     private TransactionEvent buildEvent(TransactionEntity t) {

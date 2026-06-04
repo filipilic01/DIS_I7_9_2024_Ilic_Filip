@@ -64,7 +64,7 @@ public class LoanService {
         log.info("Created loan application: loanId={}, userId={}, amount={}",
                 loan.getId(), loan.getUserId(), loan.getAmount());
 
-        rabbitMQProducer.sendLoanEvent(buildEvent(loan, "CREATED"));
+        publishEvent(buildEvent(loan, "CREATED"));
         return toResponse(loan);
     }
 
@@ -88,7 +88,7 @@ public class LoanService {
                 new BalanceUpdateDTO(loan.getAmount(), "CREDIT"));
 
         log.info("Approved loan: loanId={}, accountId={}, amount={}", id, loan.getAccountId(), loan.getAmount());
-        rabbitMQProducer.sendLoanEvent(buildEvent(loan, "APPROVED"));
+        publishEvent(buildEvent(loan, "APPROVED"));
         return toResponse(loan);
     }
 
@@ -106,7 +106,7 @@ public class LoanService {
         loan = loanRepository.save(loan);
 
         log.info("Rejected loan: loanId={}", id);
-        rabbitMQProducer.sendLoanEvent(buildEvent(loan, "REJECTED"));
+        publishEvent(buildEvent(loan, "REJECTED"));
         return toResponse(loan);
     }
 
@@ -155,7 +155,7 @@ public class LoanService {
         String eventType = loan.getStatus() == LoanStatus.PAID_OFF ? "PAID_OFF" : "PAYMENT_MADE";
         log.info("Payment recorded: loanId={}, amount={}, remaining={}, eventType={}",
                 id, request.getAmount(), newRemaining, eventType);
-        rabbitMQProducer.sendLoanEvent(buildEvent(loan, eventType));
+        publishEvent(buildEvent(loan, eventType));
         return toPaymentResponse(payment);
     }
 
@@ -170,6 +170,15 @@ public class LoanService {
         return loanRepository.findByUserId(userId).stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    private void publishEvent(LoanEvent event) {
+        try {
+            rabbitMQProducer.sendLoanEvent(event);
+        } catch (Exception e) {
+            log.error("Failed to publish loan event for loanId={}: {}",
+                    event.getLoanId(), e.getMessage());
+        }
     }
 
     private BigDecimal calculateMonthlyInstallment(BigDecimal amount, BigDecimal interestRate, int termMonths) {
