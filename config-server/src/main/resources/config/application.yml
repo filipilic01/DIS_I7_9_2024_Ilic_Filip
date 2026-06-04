@@ -1,2 +1,0 @@
-# Shared configuration for all services
-# Individual services override these in their own application.yml

@@ -3,7 +3,7 @@ name: Docker Publish
 on:
   workflow_run:
     workflows: [ "Build and Test" ]
-    branches: [ main, develop ]
+    branches: [ main ]
     types: [ completed ]
 
 permissions:
