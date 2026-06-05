@@ -1,72 +1,6 @@
 # Bankarski mikroservisni sistem
 
-Produkcijski spreman bankarski sistem izgrađen na Spring Boot 3.2 i Spring Cloud 2023.0.1, koji implementira mikroservisnu arhitekturu sa JWT autentifikacijom, asinhronom razmenom poruka i potpuno automatizovanim CI/CD pipelineom.
-
----
-
-## Pregled arhitekture
-
-```mermaid
-graph TB
-    Client(["👤 Klijent\nBrowser / Mobilni / Postman"])
-
-    subgraph GW_BOX ["🔀 API Gateway  :8080"]
-        GW["JwtAuthenticationFilter\nCircuit Breakers\nLoad-balanced routing"]
-    end
-
-    subgraph EUR_BOX ["🗂️ Eureka Server  :8761"]
-        EUR["Registar servisa\nService Discovery"]
-    end
-
-    subgraph MS ["⚙️ Mikroservisi"]
-        US["👥 User Service\n:8081 · userdb"]
-        AS["🏦 Account Service\n:8082 · accountdb"]
-        TS["💸 Transaction Service\n:8083 · transactiondb"]
-        LS["📋 Loan Service\n:8084 · loandb"]
-        NS["🔔 Notification Service\n:8085 · notificationdb"]
-    end
-
-    subgraph MQ ["📨 RabbitMQ  :5672"]
-        EX["Exchange: banking.events\n──────────────────\nRed: transaction.notifications\nRed: loan.notifications"]
-    end
-
-    DB[("🗄️ PostgreSQL  :5432\n5 odvojenih baza")]
-
-    Client -->|"HTTP zahtev\nBearer token"| GW
-
-    GW -->|"/auth/**, /users/**"| US
-    GW -->|"/accounts/**"| AS
-    GW -->|"/transactions/**"| TS
-    GW -->|"/loans/**"| LS
-    GW -->|"/notifications/**"| NS
-
-    GW <-.->|"registracija / otkrivanje"| EUR
-    US <-.->|"registracija / otkrivanje"| EUR
-    AS <-.->|"registracija / otkrivanje"| EUR
-    TS <-.->|"registracija / otkrivanje"| EUR
-    LS <-.->|"registracija / otkrivanje"| EUR
-    NS <-.->|"registracija / otkrivanje"| EUR
-
-    AS -->|"Feign: validacija korisnika"| US
-    TS -->|"Feign: ažuriranje stanja"| AS
-    LS -->|"Feign: isplata kredita"| AS
-
-    TS -->|"publish: transaction.*"| EX
-    LS -->|"publish: loan.*"| EX
-    EX -->|"consume"| NS
-
-    US -.- DB
-    AS -.- DB
-    TS -.- DB
-    LS -.- DB
-    NS -.- DB
-
-    style GW_BOX fill:#dbeafe,stroke:#3b82f6
-    style EUR_BOX fill:#fef9c3,stroke:#eab308
-    style MS fill:#dcfce7,stroke:#22c55e
-    style MQ fill:#fce7f3,stroke:#ec4899
-    style DB fill:#f3f4f6,stroke:#6b7280
-```
+Bankarski sistem izgrađen na Spring Boot 3.2 i Spring Cloud 2023.0.1, koji implementira mikroservisnu arhitekturu sa JWT autentifikacijom, asinhronom razmenom poruka i potpuno automatizovanim CI/CD pipelineom.
 
 ---
 
@@ -160,11 +94,11 @@ Upravlja kompletnim kreditnim ciklusom od zahteva do konačne otplate. Poziva **
 
 ### 5. Notification Service (port 8085)
 
-Servis vođen događajima. Ne izlaže nikakve endpoint-e za pisanje — isključivo persituje notifikacije kreirane od strane uzvodnih servisa.
+Servis vođen događajima. Ne izlaže nikakve endpoint-e za pisanje — isključivo čuva notifikacije kreirane od strane drugih servisa.
 
 **Odgovornosti:**
-- Osluškuje red `transaction.notifications` — kreira `TRANSACTION` notifikaciju za svaki događaj uplate, isplate ili prenosa.
-- Osluškuje red `loan.notifications` — kreira `LOAN` notifikaciju za svaku promenu stanja kredita.
+- Osluškuje queue `transaction.notifications` — kreira `TRANSACTION` notifikaciju za svaki događaj uplate, isplate ili prenosa.
+- Osluškuje queue `loan.notifications` — kreira `LOAN` notifikaciju za svaku promenu stanja kredita.
 - Pregled notifikacija po ID-u ili po korisniku.
 
 **Tipovi notifikacija:** `TRANSACTION` | `LOAN` | `ACCOUNT`  
@@ -517,7 +451,7 @@ push na main granu
 ┌─────────────────────────────────────────┐
 │  Workflow 2: Docker Publish              │
 │                                         │
-│  Izgradnja i guranje 7 Docker slika     │
+│  Izgradnja i guranje 7 Docker image-a     │
 │  na Docker Hub (paralelno)              │
 │  Tagovi: :latest + :<commit-sha>        │
 └──────────────┬──────────────────────────┘
@@ -559,9 +493,9 @@ Artefakti se čuvaju 7 dana:
 **Fajl:** `.github/workflows/docker-publish.yml`  
 **Okidač:** workflow `Build and Test` se uspešno završi na `main` grani
 
-Gradi i gura 7 Docker slika paralelno na Docker Hub koristeći višefazne buildove (Maven build + minimalna JRE runtime slika).
+Build-uje i push-uje 7 Docker image-a paralelno na Docker Hub koristeći višefazne buildove (Maven build + minimalna JRE runtime slika).
 
-Svaka slika dobija dva taga:
+Svaki image dobija dva taga:
 ```
 <DOCKERHUB_USERNAME>/banking-<servis>:latest
 <DOCKERHUB_USERNAME>/banking-<servis>:<commit-sha>
@@ -599,7 +533,7 @@ Tri sekvencijalne faze deployovanja sa postepeno strožom kontrolom pristupa:
 | `deploy-staging` | `staging` | Manuelno (obavezni reviewer) | http://staging.banking.local |
 | `deploy-production` | `production` | Manuelno (obavezni reviewer) | http://banking.local |
 
-Nakon uspešnog deployovanja na produkciju, automatski se kreira i gura git tag `v{run_number}` radi označavanja release-a.
+Nakon uspešnog deployovanja na produkciju, automatski se kreira i push-uje git tag `v{run_number}` radi označavanja release-a.
 
 **Podešavanje manuelnih odobrenja:**
 
@@ -671,9 +605,3 @@ Korisnici za prijavu (lozinka za sve: `password123`):
         ├── docker-publish.yml
         └── deploy.yml
 ```
-
----
-
-## Autor
-
-Filip Ilić — DIS I7/9 2024
